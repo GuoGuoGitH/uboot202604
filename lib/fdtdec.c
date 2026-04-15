@@ -624,6 +624,7 @@ int fdtdec_get_chosen_node(const void *blob, const char *name)
  */
 static int fdtdec_prepare_fdt(const void *blob)
 {
+	//FDT blob 需要 32-bit 对齐，因为里面大量字段是 big-endian 32-bit cell。如果地址低两位非 0，就认为非法。
 	if (!blob || ((uintptr_t)blob & 3) || fdt_check_header(blob)) {
 		if (xpl_phase() <= PHASE_SPL) {
 			puts("Missing DTB\n");
@@ -1077,23 +1078,19 @@ int fdtdec_setup_mem_size_base(void)
 
 	gd->ram_size = (phys_size_t)(res.end - res.start + 1);
 	gd->ram_base = (unsigned long)res.start;
-	debug("%s: Initial DRAM size %pap\n", __func__, &gd->ram_size);
+	debug("%s: Initial DRAM size %llx\n", __func__,
+	      (unsigned long long)gd->ram_size);
 
 	return 0;
 }
 
-static ofnode get_next_memory_node(ofnode mem)
+ofnode get_next_memory_node(ofnode mem)
 {
 	do {
 		mem = ofnode_by_prop_value(mem, "device_type", "memory", 7);
 	} while (!ofnode_is_enabled(mem));
 
 	return mem;
-}
-
-ofnode fdtdec_get_next_memory_node(ofnode mem)
-{
-	return get_next_memory_node(mem);
 }
 
 int fdtdec_setup_memory_banksize(void)
@@ -1128,10 +1125,10 @@ int fdtdec_setup_memory_banksize(void)
 		gd->bd->bi_dram[bank].size =
 			(phys_size_t)(res.end - res.start + 1);
 
-		debug("%s: DRAM Bank #%d: start = %pap, size = %pap\n",
+		debug("%s: DRAM Bank #%d: start = 0x%llx, size = 0x%llx\n",
 		      __func__, bank,
-		      &gd->bd->bi_dram[bank].start,
-		      &gd->bd->bi_dram[bank].size);
+		      (unsigned long long)gd->bd->bi_dram[bank].start,
+		      (unsigned long long)gd->bd->bi_dram[bank].size);
 	}
 
 	return 0;
@@ -1702,6 +1699,7 @@ int fdtdec_setup(void)
 	 * The necessary test is whether the previous phase passed a bloblist,
 	 * not whether this phase creates one.
 	 */
+	// SPL/TPL 等早期阶段已经把 control FDT 通过 bloblist 传给后续阶段
 	if (CONFIG_IS_ENABLED(BLOBLIST) &&
 	    (xpl_prev_phase() != PHASE_TPL ||
 	     IS_ENABLED(CONFIG_TPL_BLOBLIST))) {
@@ -1719,17 +1717,18 @@ int fdtdec_setup(void)
 			}
 		}
 	}
-
+	//在 XPL/SPL/TPL 构建中，FDT 可能放在 _image_binary_end 或 __bss_end；在普通 U-Boot 阶段，FDT 默认放在 _end，即镜像末尾。
 	/* Otherwise, the devicetree is typically appended to U-Boot */
 	if (ret) {
 		if (IS_ENABLED(CONFIG_OF_SEPARATE)) {
 			gd->fdt_blob = fdt_find_separate();
 			gd->fdt_src = FDTSRC_SEPARATE;
 		} else { /* embed dtb in ELF file for testing / development */
+			// 获取编译进 U-Boot ELF 内部的 DTB 地址。
 			fdtdec_setup_embed();
 		}
 	}
-
+	//板级地址自定义
 	/* Allow the board to override the fdt address. */
 	if (IS_ENABLED(CONFIG_OF_BOARD)) {
 		void *blob;
@@ -1744,25 +1743,25 @@ int fdtdec_setup(void)
 			gd->fdt_blob = blob;
 		}
 	}
-
+	//非 XPL 阶段允许环境变量覆盖 FDT 地址
 	/* Allow the early environment to override the fdt address */
 	if (!IS_ENABLED(CONFIG_XPL_BUILD)) {
 		ulong addr;
 
 		addr = env_get_hex("fdtcontroladdr", 0);
 		if (addr) {
-			gd->fdt_blob = map_sysmem(addr, 0);
+			gd->fdt_blob = map_sysmem(addr, 0);//把物理/系统地址映射成 CPU 可访问的指针。
 			gd->fdt_src = FDTSRC_ENV;
 		}
 	}
 
 setup_fdt:
 	if (CONFIG_IS_ENABLED(MULTI_DTB_FIT))
-		setup_multi_dtb_fit();
-
+		setup_multi_dtb_fit();//从fit中选择真正的DTB
+	//合法性校验
 	ret = fdtdec_prepare_fdt(gd->fdt_blob);
 	if (!ret)
-		ret = fdtdec_board_setup(gd->fdt_blob);
+		ret = fdtdec_board_setup(gd->fdt_blob);//板级合法性校验
 	oftree_reset();
 
 	return ret;
