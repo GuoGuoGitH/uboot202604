@@ -102,7 +102,8 @@ int dm_init(bool of_live)
 	if (CONFIG_IS_ENABLED(OF_PLATDATA_INST)) {
 		gd->uclass_root = &uclass_head;
 	} else {
-		gd->uclass_root = &DM_UCLASS_ROOT_S_NON_CONST;
+		gd->uclass_root = &DM_UCLASS_ROOT_S_NON_CONST;//全局 uclass 链表的表头 / 哨兵头节点
+		//把 gd->uclass_root 指向一个空链表头，后面 uclass_get()、uclass_add() 等才能往里面挂各类 uclass。
 		INIT_LIST_HEAD(DM_UCLASS_ROOT_NON_CONST);
 	}
 
@@ -113,6 +114,7 @@ int dm_init(bool of_live)
 			return ret;
 		}
 	} else {
+		//bind 创建设备, 建立链条, 填充信息
 		ret = device_bind_by_name(NULL, false, &root_info,
 					  &DM_ROOT_NON_CONST);
 		if (ret)

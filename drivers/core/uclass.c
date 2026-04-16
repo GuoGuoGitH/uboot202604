@@ -716,6 +716,7 @@ int uclass_bind_device(struct udevice *dev)
 	int ret;
 
 	uc = dev->uclass;
+	//到这里，dev 已经进入：parent 的 child 链表,uclass 的 dev 链表
 	list_add_tail(&dev->uclass_node, &uc->dev_head);
 
 	if (dev->parent) {

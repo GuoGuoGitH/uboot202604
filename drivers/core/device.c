@@ -37,6 +37,10 @@
 
 DECLARE_GLOBAL_DATA_PTR;
 
+//  创建 udevice
+//  建立 parent/uclass 关系
+//  分配 plat
+//  执行 bind 回调
 static int device_bind_common(struct udevice *parent, const struct driver *drv,
 			      const char *name, void *plat,
 			      ulong driver_data, ofnode node,
@@ -72,6 +76,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 #if CONFIG_IS_ENABLED(DEVRES)
 	INIT_LIST_HEAD(&dev->devres_head);
 #endif
+	//填充 udevice 基本字段
 	dev_set_plat(dev, plat);
 	dev->driver_data = driver_data;
 	dev->name = name;
@@ -80,7 +85,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 	dev->driver = drv;
 	dev->uclass = uc;
 
-	dev->seq_ = -1;
+	dev->seq_ = -1;//优先 alias,否则自动分配
 	if (CONFIG_IS_ENABLED(DM_SEQ_ALIAS) &&
 	    (uc->uc_drv->flags & DM_UC_FLAG_SEQ_ALIAS)) {
 		/*
@@ -101,6 +106,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 		dev->seq_ = uclass_find_next_free_seq(uc);
 
 	/* Check if we need to allocate plat */
+	//分配 plat 数据
 	if (drv->plat_auto) {
 		bool alloc = !plat;
 
@@ -132,6 +138,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 		}
 	}
 
+	//uclass 给每个设备保留的公共平台数据
 	size = uc->uc_drv->per_device_plat_auto;
 	if (size) {
 		dev_or_flags(dev, DM_FLAG_ALLOC_UCLASS_PDATA);
@@ -142,7 +149,7 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 		}
 		dev_set_uclass_plat(dev, ptr);
 	}
-
+    //父设备看待这个子设备时需要的附加数据
 	if (parent) {
 		size = parent->driver->per_child_plat_auto;
 		if (!size)
@@ -165,13 +172,14 @@ static int device_bind_common(struct udevice *parent, const struct driver *drv,
 		goto fail_uclass_bind;
 
 	/* if we fail to bind we remove device from successors and free it */
+	//调用 driver 的 bind 回调
 	if (drv->bind) {
-		ret = drv->bind(dev);
+		ret = drv->bind(dev);/*递归绑定子节点或创建子设备, 父设备一绑定 -> 顺手把它下面的子设备也建出来*/
 		if (ret)
 			goto fail_bind;
 	}
 	if (parent && parent->driver->child_post_bind) {
-		ret = parent->driver->child_post_bind(dev);
+		ret = parent->driver->child_post_bind(dev);/*child 已经创建出来了 -> 父设备趁这个时机给 child 补上总线侧信息 */
 		if (ret)
 			goto fail_child_post_bind;
 	}
@@ -254,6 +262,22 @@ int device_bind(struct udevice *parent, const struct driver *drv,
 				  devp);
 }
 
+/*	device_bind_by_name()
+	-> 按名字找到 struct driver
+	-> 检查 pre-reloc 权限
+	-> 调用 device_bind_common()
+
+	device_bind_common()
+	-> 找到/创建 uclass
+	-> 分配 struct udevice
+	-> 填写基本字段
+	-> 分配 plat / uclass_plat / parent_plat
+	-> 插入 parent 的 child 链表
+	-> 插入 uclass 的 dev 链表
+	-> 调用 drv->bind()
+	-> 调用 parent->child_post_bind()
+	-> 调用 uclass->post_bind()
+	-> 设置 DM_FLAG_BOUND 	*/
 int device_bind_by_name(struct udevice *parent, bool pre_reloc_only,
 			const struct driver_info *info, struct udevice **devp)
 {
