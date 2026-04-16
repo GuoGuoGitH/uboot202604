@@ -451,7 +451,11 @@ int device_of_to_plat(struct udevice *dev)
 
 	if (drv->of_to_plat &&
 	    (CONFIG_IS_ENABLED(OF_PLATDATA) || dev_has_ofnode(dev))) {
-		ret = drv->of_to_plat(dev);
+		ret = drv->of_to_plat(dev);//设备驱动自实现的fdt读取
+		/* dev_read_*() 之所以能读到对应设备的 DT 属性，/
+		不是因为它知道设备名，而是因为 udevice 在 bind 时已经保存了自己的 ofnode；/
+		这个 ofnode 本质上记录了该节点在 gd->fdt_blob 这棵 DTB 里的位置，/
+		后续 ofnode_read_*() 再用 fdt_getprop() 等 libfdt 接口从那个确切节点取属性。 */
 		if (ret)
 			goto fail;
 	}

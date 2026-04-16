@@ -374,7 +374,7 @@ int dm_init_and_scan(bool pre_reloc_only)
 {
 	int ret;
 
-	ret = dm_init(CONFIG_IS_ENABLED(OF_LIVE));
+	ret = dm_init(CONFIG_IS_ENABLED(OF_LIVE));//这里是根设备的bind与probe,至此根设备已经准备好了
 	if (ret) {
 		dm_warn("dm_init() failed: %d\n", ret);
 		return ret;
