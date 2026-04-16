@@ -120,13 +120,13 @@ int dm_init(bool of_live)
 		if (ret)
 			return ret;
 		if (CONFIG_IS_ENABLED(OF_CONTROL))
-			dev_set_ofnode(DM_ROOT_NON_CONST, ofnode_root());
-		ret = device_probe(DM_ROOT_NON_CONST);
+			dev_set_ofnode(DM_ROOT_NON_CONST, ofnode_root());//告诉 Driver Model：你这棵设备树对应的 DT 根，就是 /。后面如果要从根开始扫节点，就从这里出发
+		ret = device_probe(DM_ROOT_NON_CONST);//根设备的probe.基本没有实际初始化,把 DM 根设备置为 active / ready，让它成为整棵 DM 树的活动起点
 		if (ret)
 			return ret;
 	}
 
-	INIT_LIST_HEAD((struct list_head *)&gd->dmtag_list);
+	INIT_LIST_HEAD((struct list_head *)&gd->dmtag_list);//把 DM tag 的全局链表头也清空/置空。
 
 	return 0;
 }

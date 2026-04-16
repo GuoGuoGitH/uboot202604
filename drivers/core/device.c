@@ -442,7 +442,7 @@ int device_of_to_plat(struct udevice *dev)
 				return 0;
 		}
 
-		ret = device_alloc_priv(dev);
+		ret = device_alloc_priv(dev);//分配的是 probe 用的运行时 private data
 		if (ret)
 			goto fail;
 	}
@@ -524,11 +524,11 @@ int device_probe(struct udevice *dev)
 	drv = dev->driver;
 	assert(drv);
 
-	ret = device_of_to_plat(dev);
+	ret = device_of_to_plat(dev);//具体解析fdt的动作
 	if (ret)
 		goto fail;
 
-	/* Ensure all parents are probed */
+	/* Ensure all parents are probed , 提前确保父设备probe, 例如I2C child 依赖 I2C bus*/
 	if (dev->parent) {
 		ret = device_probe(dev->parent);
 		if (ret)
@@ -546,6 +546,7 @@ int device_probe(struct udevice *dev)
 
 	dev_or_flags(dev, DM_FLAG_ACTIVATED);
 
+	//确保电源已打开
 	if (CONFIG_IS_ENABLED(POWER_DOMAIN) && dev->parent &&
 	    (device_get_uclass_id(dev) != UCLASS_POWER_DOMAIN) &&
 	    !(drv->flags & DM_FLAG_DEFAULT_PD_CTRL_OFF)) {
@@ -587,10 +588,11 @@ int device_probe(struct udevice *dev)
 	if (ret)
 		goto fail;
 
+	//uclass的前置probe
 	ret = uclass_pre_probe_device(dev);
 	if (ret)
 		goto fail;
-
+	//父设备的前置probe
 	if (dev->parent && dev->parent->driver->child_pre_probe) {
 		ret = dev->parent->driver->child_pre_probe(dev);
 		if (ret)
@@ -609,6 +611,7 @@ int device_probe(struct udevice *dev)
 	}
 
 	if (drv->probe) {
+		//真正的设备初始化
 		ret = drv->probe(dev);
 		if (ret)
 			goto fail;
