@@ -256,7 +256,7 @@ int dm_extended_scan(bool pre_reloc_only)
 		"/reserved-memory",
 	};
 
-	ret = dm_scan_fdt(pre_reloc_only);
+	ret = dm_scan_fdt(pre_reloc_only);//只扫根节点的直接子节点, 意为只会向下扫面一层,至此fdt一级子节点bind完成
 	if (ret) {
 		dm_warn("dm_scan_fdt() failed: %d\n", ret);
 		return ret;
@@ -356,7 +356,7 @@ static int dm_scan(bool pre_reloc_only)
 	}
 
 	if (CONFIG_IS_ENABLED(OF_REAL)) {
-		ret = dm_extended_scan(pre_reloc_only);
+		ret = dm_extended_scan(pre_reloc_only);//扫描FDT的核心函数,非根设备
 		if (ret) {
 			dm_warn("dm_extended_scan() failed: %d\n", ret);
 			return ret;
@@ -380,7 +380,7 @@ int dm_init_and_scan(bool pre_reloc_only)
 		return ret;
 	}
 	if (!CONFIG_IS_ENABLED(OF_PLATDATA_INST)) {
-		ret = dm_scan(pre_reloc_only);
+		ret = dm_scan(pre_reloc_only);//扫描并bind非根设备
 		if (ret) {
 			log_debug("dm_scan() failed: %d\n", ret);
 			return ret;

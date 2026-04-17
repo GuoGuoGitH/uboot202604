@@ -813,7 +813,7 @@ static int initf_dm(void)
 		return 0;
 
 	bootstage_start(BOOTSTAGE_ID_ACCUM_DM_F, "dm_f");
-	ret = dm_init_and_scan(true);
+	ret = dm_init_and_scan(true); //该函数完成根设备和子设备的扫面,fdt绑定及bind
 	if (ret)
 		return ret;
 

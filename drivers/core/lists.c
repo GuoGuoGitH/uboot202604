@@ -196,11 +196,31 @@ static int driver_check_compatible(const struct udevice_id *of_match,
 	return -ENOENT;
 }
 
+/*读取 node 的 compatible 列表
+如果没有 compatible：
+    跳过这个节点
+
+对 compatible 列表中的每个字符串按优先级遍历：
+    对系统中每个 driver 遍历：
+        如果模式不允许，跳过
+        如果 compatible 不匹配，跳过
+        如果 pre-reloc 阶段不允许绑定，整个节点跳过
+        尝试 bind
+        如果 bind 成功：
+            返回成功
+        如果 driver 拒绝(-ENODEV)：
+            继续尝试别的 driver
+        如果其他错误：
+            返回错误
+
+如果最终没有任何 driver 匹配：
+    返回成功（表示忽略该节点）
+*/
 int lists_bind_fdt(struct udevice *parent, ofnode node, struct udevice **devp,
 		   struct driver *drv, bool pre_reloc_only)
 {
-	struct driver *driver = ll_entry_start(struct driver, driver);
-	const int n_ents = ll_entry_count(struct driver, driver);
+	struct driver *driver = ll_entry_start(struct driver, driver);//取出注册到U_BOOT_DRIVER中的驱动到driver
+	const int n_ents = ll_entry_count(struct driver, driver);//driver总数
 	const struct udevice_id *id;
 	struct driver *entry;
 	struct udevice *dev;
@@ -212,7 +232,7 @@ int lists_bind_fdt(struct udevice *parent, ofnode node, struct udevice **devp,
 		*devp = NULL;
 	name = ofnode_get_name(node);
 	log_debug("bind node %s\n", name);
-
+	//只有含有compatible的节点才参与dm绑定, 其中字符串前面的更具体,后面的更通用
 	compat_list = ofnode_get_property(node, "compatible", &compat_length);
 	if (!compat_list) {
 		if (compat_length == -FDT_ERR_NOTFOUND) {
@@ -247,13 +267,16 @@ int lists_bind_fdt(struct udevice *parent, ofnode node, struct udevice **devp,
 			id = NULL;
 			if (entry->of_match) {
 				ret = driver_check_compatible(entry->of_match, &id,
-							      compat);
+							      compat);	//利用compatible与driver中的of_match 匹配
 				if (ret)
 					continue;
 				log_debug("   - found match at driver '%s' for '%s'\n",
 					  entry->name, id->compatible);
 			}
 
+			/*如果当前阶段只允许绑 pre-reloc 设备，那么一个节点必须满足下面之一：
+				节点本身带 pre-reloc 属性
+				driver 带 DM_FLAG_PRE_RELOC*/
 			if (pre_reloc_only) {
 				if (!ofnode_pre_reloc(node) &&
 				    !(entry->flags & DM_FLAG_PRE_RELOC)) {
